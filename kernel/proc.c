@@ -274,12 +274,15 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+  //enable child process tracing
+  np->tracemask = p->tracemask;
 
   np->parent = p;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
+  
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
 

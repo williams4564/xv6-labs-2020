@@ -7,7 +7,7 @@
 #include "spinlock.h"
 #include "proc.h"
 
-#define STRMAX 256
+//#define STRMAX 256
 
 uint64
 sys_exit(void)
@@ -98,15 +98,13 @@ sys_uptime(void)
   return xticks;
 }
 
-/*
+
 //int trace(int, const char*, ...);
 uint64
 sys_trace(void){
   int callNum;
-  char string[STRMAX];
-  if((argstr(0, &string) < 0 || argint(0, &callNum) < 0))
+  if(argint(0, &callNum) < 0)
     return -1;
-  
-  
+  myproc()->tracemask = callNum;
+  return 0;
 }
-*/
