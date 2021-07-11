@@ -105,6 +105,7 @@ extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_trace(void);
+extern uint64 sys_sysinfo(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -129,6 +130,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_trace]   sys_trace,
+[SYS_sysinfo] sys_sysinfo,
 };
 
 
@@ -154,6 +156,8 @@ char *syscallnames[] = {
   "sbrk",
   "sleep",
   "uptime",
+  "trace",
+  "sysinfo",
 };
 
 
@@ -170,7 +174,7 @@ syscall(void)
     //p->trapframe->a0   Return value here
     //tf->eax
     //printf("%s -> %d\n", syscallnames[num-1], );
-    if(p->tracemask & (1 << num)){
+    if(p->tracemask){ //& (1 << num)){
       printf("%d: syscall %s -> %d\n", p->pid, syscallnames[num], p->trapframe->a0);
     }
   } else {
@@ -180,26 +184,3 @@ syscall(void)
   }
 }
 
-/*  make this return string based on number
-#define SYS_fork    1
-#define SYS_exit    2
-#define SYS_wait    3
-#define SYS_pipe    4
-#define SYS_read    5
-#define SYS_kill    6
-#define SYS_exec    7
-#define SYS_fstat   8
-#define SYS_chdir   9
-#define SYS_dup    10
-#define SYS_getpid 11
-#define SYS_sbrk   12
-#define SYS_sleep  13
-#define SYS_uptime 14
-#define SYS_open   15
-#define SYS_write  16
-#define SYS_mknod  17
-#define SYS_unlink 18
-#define SYS_link   19
-#define SYS_mkdir  20
-#define SYS_close  21
-*/

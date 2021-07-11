@@ -108,3 +108,8 @@ sys_trace(void){
   myproc()->tracemask = callNum;
   return 0;
 }
+
+uint64
+sys_sysinfo(void){
+
+}
