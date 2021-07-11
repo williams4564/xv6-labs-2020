@@ -152,6 +152,7 @@ UPROGS=\
 	$U/_sleep\
 	$U/_pingpong\
 	$U/_trace\
+	$U/_sysinfo\
 
 
 ifeq ($(LAB),syscall)
