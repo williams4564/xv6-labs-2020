@@ -55,6 +55,12 @@ kvminithart()
   w_satp(MAKE_SATP(kernel_pagetable));
   sfence_vma();
 }
+//for user's kernel page table
+void
+user_kvminithart(pagetable_t kpt){
+  w_satp(MAKE_SATP(kpt));
+  sfence_vma(); 
+}
 
 // Return the address of the PTE in page table pagetable
 // that corresponds to virtual address va.  If alloc!=0,
@@ -119,6 +125,13 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
 {
   if(mappages(kernel_pagetable, va, sz, pa, perm) != 0)
     panic("kvmmap");
+}
+
+//copied version for user copy of kernel page table
+void 
+user_kvmmap(pagetable_t kpt, uint64 va, uint64 pa, uint64 sz, int perm){
+  if(mappages(kpt, va, sz, pa, perm) != 0)
+    panic("kvmmap");  
 }
 
 // translate a kernel virtual address to
@@ -473,5 +486,3 @@ vmprint(pagetable_t pagetable)
     }
   }
 }
-
-//make recursive

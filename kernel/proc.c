@@ -21,6 +21,8 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
+extern char etext[];  // kernel.ld sets this to end of kernel code.
+
 // initialize the proc table at boot time.
 void
 procinit(void)
@@ -34,12 +36,14 @@ procinit(void)
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
-      char *pa = kalloc();
+      //MOVED TO ALLOCPROC
+    /*  char *pa = kalloc();
       if(pa == 0)
         panic("kalloc");
       uint64 va = KSTACK((int) (p - proc));
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
+      */
   }
   kvminithart();
 }
@@ -85,6 +89,53 @@ allocpid() {
   return pid;
 }
 
+
+//copy of kvmmap to specify which pagetable_t to use
+void
+kvmmap_select(pagetable_t pageT,uint64 va, uint64 pa, uint64 sz, int perm){
+  if(mappages(pageT, va, sz, pa, perm) != 0)
+    panic("kvmmap");
+}
+
+pagetable_t
+init_proc_kernel_pagetable(){
+  //called from allocproc
+  //pagetable_t kpt  = (pagetable_t) kalloc();
+  pagetable_t kpt  = (pagetable_t) uvmcreate();
+  if(kpt == 0)
+    return 0;
+  //memset(kpt, 0 ,PGSIZE);
+  int i;
+  for(i =1; i < 512; i++){
+    kpt[i] = kernel_pagetable[i];
+  }
+
+    // uart registers
+  user_kvmmap(kpt, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+
+  // virtio mmio disk interface
+  user_kvmmap(kpt, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+
+  // CLINT
+  user_kvmmap(kpt, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+
+  // PLIC
+  user_kvmmap(kpt, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+
+  // map kernel text executable and read-only.
+  user_kvmmap(kpt, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+
+  // map kernel data and the physical RAM we'll make use of.
+  user_kvmmap(kpt, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+
+  // map the trampoline for trap entry/exit to
+  // the highest virtual address in the kernel.
+  user_kvmmap(kpt, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+
+  return kpt;
+}
+
+
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
@@ -127,8 +178,29 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  //init kernelPT
+  p->kernelPT = init_proc_kernel_pagetable();
+  if(p->kernelPT == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  //copying from procinit, previous location
+
+      // Allocate a page for the process's kernel stack.
+      // Map it high in memory, followed by an invalid
+      // guard page.
+      char *pa = kalloc();
+      if(pa == 0)
+        panic("kalloc");
+      uint64 va = KSTACK((int) (p - proc));
+      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      p->kstack = va;  
+
   return p;
 }
+
 
 // free a proc structure and the data hanging from it,
 // including user pages.
@@ -150,6 +222,10 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+
+  if(p->kernelPT)
+    proc_freepagetable(p->kernelPT, 0); //??how to preserve physical memory
+    //containing actual kernel page table
 }
 
 // Create a user page table for a given process,
@@ -471,6 +547,8 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
+        //load user's kernel page table
+        user_kvminithart(p->kernelPT);
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
@@ -489,6 +567,8 @@ scheduler(void)
     if(found == 0) {
       intr_on();
       asm volatile("wfi");
+      //switching to default kernel page table when no process is found/running
+      kvminithart();
     }
   }
 }
