@@ -22,6 +22,7 @@ static void freeproc(struct proc *p);
 extern char trampoline[]; // trampoline.S
 
 extern char etext[];  // kernel.ld sets this to end of kernel code.
+extern pagetable_t kernel_pagetable;
 
 // initialize the proc table at boot time.
 void
@@ -124,13 +125,6 @@ found:
     release(&p->lock);
     return 0;
   }
-
-  // Set up new context to start executing at forkret,
-  // which returns to user space.
-  memset(&p->context, 0, sizeof(p->context));
-  p->context.ra = (uint64)forkret;
-  p->context.sp = p->kstack + PGSIZE;
-
   //init kernelPT
   p->kernelPT = init_proc_kernel_pagetable();
   if(p->kernelPT == 0){
@@ -141,7 +135,7 @@ found:
 
   //copying from procinit, previous location
 
-    /*  // Allocate a page for the process's kernel stack.
+      // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
       char *pa = kalloc();
@@ -150,7 +144,7 @@ found:
       uint64 va = KSTACK((int) (p - proc));
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;  
-      */
+      
   //set up new context to start executing at forkret, which returns
   //to userspace
   memset(&p->context, 0, sizeof(p->context));
@@ -172,10 +166,12 @@ freeproc(struct proc *p)
   p->trapframe = 0;
 
   if(p->kstack){
-    pte_t* pte =  walk(p->kernelPT, p->kstack, 0);
+   /* pte_t* pte =  walk(p->kernelPT, p->kstack, 0);
     if(pte == 0)
       panic("freeproc walk error");
     kfree((void*)PTE2PA(*pte));
+    */
+   uvmunmap(p->kernelPT, p->kstack, 1, 1);
   }
   p->kstack = 0;
 
@@ -519,13 +515,17 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        //load user's kernel page table
-        user_kvminithart(p->kernelPT);
+       
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+
+         //load user's kernel page table
+        //user_kvminithart(p->kernelPT);
+        w_satp(MAKE_SATP(p->kernelPT));
+        sfence_vma(); 
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
@@ -539,7 +539,9 @@ scheduler(void)
       release(&p->lock);
     }
     if(found == 0) {
-      kvminithart();
+      //kvminithart();
+      w_satp(MAKE_SATP(kernel_pagetable));
+      sfence_vma();
       intr_on();
       asm volatile("wfi");
       //switching to default kernel page table when no process is found/running
