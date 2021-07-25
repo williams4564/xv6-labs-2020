@@ -176,6 +176,8 @@ int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t);
+pagetable_t     init_proc_kernel_pagetable();
+pte_t *         walk(pagetable_t, uint64, int);
 
 
 // plic.c

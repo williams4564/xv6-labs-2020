@@ -15,6 +15,60 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
+
+//copy of kvmmap to specify which pagetable_t to use
+void
+kvmmap_select(pagetable_t pageT,uint64 va, uint64 pa, uint64 sz, int perm){
+  if(mappages(pageT, va, sz, pa, perm) != 0)
+    panic("kvmmap");
+}
+
+/*
+copying entries 1-512 into new page table and mapping devices living in 
+the 0 space after that.
+
+*/
+pagetable_t
+init_proc_kernel_pagetable(){
+  //called from allocproc
+  //pagetable_t kpt  = (pagetable_t) kalloc();
+  pagetable_t kpt  = (pagetable_t) uvmcreate();
+  if(kpt == 0)
+    return 0;
+  //memset(kpt, 0 ,PGSIZE);
+  int i;
+  for(i =1; i < 512; i++){
+    kpt[i] = kernel_pagetable[i];
+  }
+
+    // uart registers
+  user_kvmmap(kpt, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+
+  // virtio mmio disk interface
+  user_kvmmap(kpt, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+
+  // CLINT
+  user_kvmmap(kpt, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+
+  // PLIC
+  user_kvmmap(kpt, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+
+ /*// map kernel text executable and read-only.
+  user_kvmmap(kpt, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+
+  // map kernel data and the physical RAM we'll make use of.
+  user_kvmmap(kpt, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+
+  // map the trampoline for trap entry/exit to
+  // the highest virtual address in the kernel.
+  user_kvmmap(kpt, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+
+  user_kvmmap(kpt, TRAPFRAME, (uint64)(p->trapframe), PGSIZE, PTE_R | PTE_W);
+  */
+
+  return kpt;
+}
+
 /*
  * create a direct-map page table for the kernel.
  */
@@ -485,4 +539,32 @@ vmprint(pagetable_t pagetable)
         panic("vmprint: leaf");
     }
   }
+}
+
+//free the user process kernel page table
+/*
+only entry in top-level page directory is entry 0, so only 1 mid-level page directory
+to free and potentially 512 bottomt-level page directories. We have to free the actual
+physical pages pointed to by the bottom-level page directories because none were allocated
+by init_proc_kernel_pagetable()
+*/
+void
+free_ukvm(pagetable_t pagetable){
+  // there are 2^9 = 512 PTEs in a page table.
+  pte_t pte = pagetable[0];
+  pagetable_t level1 = (pagetable_t) PTE2PA(pte);
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+      // this PTE points to a lower-level page table.
+      
+      //freewalk((pagetable_t)child);
+    if(pte & PTE_V){
+      //panic("freewalk: leaf");
+      uint64 child = PTE2PA(pte); //level2 of page table
+      kfree((void*) child);
+      level1[i] = 0;
+    }
+  }
+  kfree((void*) level1);
+  kfree((void*)pagetable);
 }

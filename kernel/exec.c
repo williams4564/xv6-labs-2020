@@ -117,7 +117,7 @@ exec(char *path, char **argv)
   proc_freepagetable(oldpagetable, oldsz);
 
   if(p->pid == 1)
-    vmprint(p->pagetable);
+    //vmprint(p->pagetable);   //prints initial page table contents
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
