@@ -1,3 +1,5 @@
+Wiliams4564: This was how I learned Kernel programming, after reading about how Linux Torvalds learned his skill during graduate school writing for Minix. As there is no well kept version of Minix, this is the next best thing. I completed multiple labs from MIT and currently have moved on to working on an OS for SPEDE development environment.
+
 xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
 Version 6 (v6).  xv6 loosely follows the structure and style of v6,
 but is implemented for a modern RISC-V multiprocessor using ANSI C.
